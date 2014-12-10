@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<script>
+
+
+var Energy = {};
+Energy.Settings = {};
+Energy.Settings.DefaultLevel = 3;
+Energy.Create = function()
+{
+	var obj = {};
+	
+	obj.Level = Energy.Settings.DefaultLevel;
+	
+	return obj;
+};
+
+
+var Ability = {};
+Ability.Types = {};
+Ability.Types.Damage = function(){};
+Ability.Types.Heal = function(){};
+Ability.Types.Shield = function(){};
+Ability.Create = function(inVector, inType, inTargets, inDuration)
+{
+	var obj = {};
+	obj.Vector = inVector;//array of intergers. when added, they must equal 0. no value (positive or negative) can exceed the total amount of energy in the world: World.Energies.length * Energy.Settings.DefaultLevel
+	obj.Targets = inTargets;
+	obj.Duration = inDuration;
+	obj.Type = inType;
+	
+	//derived values
+	var i;
+	obj.Subtractions = [];
+	obj.Power
+	for(i=0; i<obj.Vector.length; i++)
+	{
+		if(obj.Vector[i] < 0)
+		{
+			obj.VectorNegative.push({Index:i, Amount:obj.Vector[i]});
+		}
+	}
+	return obj;
+};
+// Check to see if performing an ability would cause one of the energy levels to go below 0
+Ability.Check = function(inAbility)
+{
+	var i;
+	var current;
+	for(i=0; i<inAbility.Subtractions.length; i++)
+	{
+		current = inAbility.Subtractions[i];
+		//current.Amount will be negative
+		if(World.Energies[current.Index].Level + current.Amount < 0)
+		{
+			return false;
+		}
+	}
+	return true;
+};
+// Actually perform the ability
+Ability.Perform = function(inAbility)
+{
+	var i;;
+	for(i=0; i<inAbility.Vector.length; i++)
+	{
+		World.Energies[i].Level += inAbility.Vector[i];
+	}
+};
+
+
+var World = {};
+World.Energies = [];
+World.Energies.push(Energy.Create);
+World.Energies.push(Energy.Create);
+World.Energies.push(Energy.Create);
+
+
+</script>
+	</head>
+	<body>
+		
+	</body>
+<html>
