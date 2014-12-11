@@ -1,7 +1,8 @@
 <!DOCTYPE html>
 <html>
 	<head>
-		<script>
+	
+<script>
 
 
 var Energy = {};
@@ -25,20 +26,29 @@ Ability.Types.Shield = function(){};
 Ability.Create = function(inVector, inType, inTargets, inDuration)
 {
 	var obj = {};
-	obj.Vector = inVector;//array of intergers. when added, they must equal 0. no value (positive or negative) can exceed the total amount of energy in the world: World.Energies.length * Energy.Settings.DefaultLevel
+	obj.Vector = inVector;
+	//array of integers.
+	//when added, they must equal 0.
+	//no value (positive or negative) can exceed the total amount of energy in the world: World.Energies.length * Energy.Settings.DefaultLevel
+	
 	obj.Targets = inTargets;
+	// how many players the ability will effect
+	
 	obj.Duration = inDuration;
+	// how long will the ability effect players
+	
 	obj.Type = inType;
 	
 	//derived values
-	var i;
-	obj.Subtractions = [];
-	obj.Power
+	obj.Subtractions = []; // these parts of the vector are used to check whether or not the ability can be used
+	obj.Power = 0; // "power" of the ability, based on how much energy is moving around
+	var i;	
 	for(i=0; i<obj.Vector.length; i++)
 	{
 		if(obj.Vector[i] < 0)
 		{
-			obj.VectorNegative.push({Index:i, Amount:obj.Vector[i]});
+			obj.Subtractions.push({Index:i, Amount:obj.Vector[i]});
+			obj.Power -= obj.Vector[i];
 		}
 	}
 	return obj;
@@ -62,7 +72,7 @@ Ability.Check = function(inAbility)
 // Actually perform the ability
 Ability.Perform = function(inAbility)
 {
-	var i;;
+	var i;
 	for(i=0; i<inAbility.Vector.length; i++)
 	{
 		World.Energies[i].Level += inAbility.Vector[i];
@@ -70,14 +80,64 @@ Ability.Perform = function(inAbility)
 };
 
 
-var World = {};
-World.Energies = [];
-World.Energies.push(Energy.Create);
-World.Energies.push(Energy.Create);
-World.Energies.push(Energy.Create);
+var Group = {};
+Group.Create = function()
+{
+	var obj = {};
+	obj.Members = [];
+	return obj;
+};
+
+
+var Player = {};
+Player.Create = function(inGroup)
+{
+	var obj = {};
+	
+	obj.Group = inGroup;
+	obj.Group.Members.push(obj);
+	
+	obj.Health = 100;
+	obj.Shield = 0;
+	obj.Weakness = 0;
+	
+	obj.Abilities = [];
+	obj.Targets = [];
+	
+	obj.Empowered = World.Energies[0]; // (increases outgoing effects)
+	obj.Inhibited = World.Energies[0]; // (increases incoming negative effects / reduces incoming positive effects)
+	
+	return obj;
+};
 
 
 </script>
+
+<script>
+
+var World = {};
+World.Energies = [];
+World.Groups = [];
+
+World.Energies.push(Energy.Create());
+World.Energies.push(Energy.Create());
+World.Energies.push(Energy.Create());
+
+World.Groups.push(Group.Create());
+World.Groups.push(Group.Create());
+
+var p1 = Player.Create(World.Groups[0]);
+var p2 = Player.Create(World.Groups[1]);
+
+var a1 = Ability.Create([-1, 1, 0], Ability.Types.Damage, 1, 1);
+var a2 = Ability.Create([0, -1, 1], Ability.Types.Damage, 1, 1);
+var a3 = Ability.Create([1, 0, -1], Ability.Types.Damage, 1, 1);
+
+p1.Abilities = [a1, a2, a3];
+p2.Abilities = [a1, a2, a3];
+
+</script>
+
 	</head>
 	<body>
 		
