@@ -17,11 +17,27 @@ Stat.Listen = function(inStat, inHandler)
 {
 	inStat.Handlers.push(inHandler);
 };
-Stat.Change = function(inStat, inAmount)
+Stat.Unlisten = function(inStat, inHandler)
 {
-	var was, is;
+	var i;
+	for(i=0; i<inStat.Handlers.length; i++)
+	{
+		if(inStat.Handlers[i] === inHandler)
+		{
+			inStat.Handlers.splice(i, 1);
+			return;
+		}
+	}
+};
+Stat.Relative = function(inStat, inAmount)
+{
+	Stat.Absolute(inStat, inStat.Level+inAmount);
+};
+Stat.Absolute = function(inStat, inAmount)
+{
+	var was, difference, i;
 	was = inStat.Level;
-	inStat.Level += inAmount;
+	inStat.Level = inAmount;
 	if(inStat.Level < inStat.Min)
 	{
 		inStat.Level = inStat.Min;
@@ -30,36 +46,35 @@ Stat.Change = function(inStat, inAmount)
 	{
 		inStat.Level = inStat.Max;
 	}
-	is = inStat.Level;
-	
-	var i;
+	difference = inStat.Level-was;
 	for(i=0; i<inStat.Handlers.length; i++)
 	{
-		inStat.Handlers[i](inStat, is-was);
-	}
-	
+		inStat.Handlers[i](inStat, difference);
+	}	
 };
 
-var Utilities = {};
-Utilities.SetID = function(inObj)
-{
-	inObj.ID = Math.floor(Math.random()*100000);
-};
+/*
+An Ability has the power to alter energy levels, causing the ability to "charge."
+A charged ability can then be used to effect other players, consuming the charge.
 
+Both the charging of and use of Abilities cause the player to consume action points for their turn.
 
-var Energy = {};
-Energy.Settings = {};
-Energy.Settings.DefaultLevel = 3;
-Energy.Create = function()
-{
-	var obj = {};
-	
-	obj.Level = Energy.Settings.DefaultLevel;
-	
-	return obj;
-};
+With each use, the player can modify the Ability's effect to be spread out accross multiple targets and/or to be applied over time.
+Dividing up the effect this way causes it to have a different strength.
+The total amount of power is scaled by 10% for each division, and then the total is split evenly among the divisions:
 
+Dealing damage to 2 targets over 3 turns will result in 60% more damage dealt in total, at the cost of only dealing one-sixth of this damage to each player each turn.
+The same holds true for dealing damage to 3 targets over 2 turns.
 
+Dealing damage to 1 target over 2 turns will result in 20% more damage, at the cost of dealing only one-half of this damage each turn.
+The same holds true for dealing damage to 2 targets this turn only.
+
+The strength of the effect is modified by the player's Empowered stat.
+The effect strength is calculated only once when the effect is created and lasts the duration of the effect.
+
+Applications of the effect to a target player are modified by the target player's Inhibited stat.
+This modification is re-calculated each time the effect is applied to it's target.
+*/
 var Ability = {};
 Ability.Create = function(inVector, inType)
 {
@@ -84,20 +99,19 @@ Ability.Create = function(inVector, inType)
 		}
 	}
 	
-	ability.Charge = false;
+	obj.Charge = Stat.Create(0, 1, 0);
 	
 	return obj;
 };
 // Check to see if performing an ability would cause one of the energy levels to go below 0
-Ability.Check = function(inAbility)
+Ability.Check = function(inAbility, inEnergies)
 {
 	var i;
 	var current;
 	for(i=0; i<inAbility.Subtractions.length; i++)
 	{
 		current = inAbility.Subtractions[i];
-		//current.Amount will be negative
-		if(World.Energies[current.Index].Level + current.Amount < 0)
+		if(inEnergies[current.Index].Level < -current.Amount)
 		{
 			return false;
 		}
@@ -105,54 +119,65 @@ Ability.Check = function(inAbility)
 	return true;
 };
 // Charge the ability for use
-Ability.Charge = function(inAbility)
+Ability.Charge = function(inAbility, inEnergies)
 {
 	var i;
 	for(i=0; i<inAbility.Vector.length; i++)
 	{
-		World.Energies[i].Level += inAbility.Vector[i];
+		Stat.Relative(inEnergies[i], inAbility.Vector[i]);
 	}
 	inAbility.Charged = true;
 };
-// creates an "effect" that will be used on onther players
 Ability.Use = function(inPlayer, inAbility, inTargets, inDuration)
 {
-	var e = Effect.Create(inPlayer.Empowered.Level, inDuration, inTargets);
+	var i;
+	var effect;
+	for(i=0; i<inTargets.length; i++)
+	{
+		effect = Effect.Create(inAbility.Power, inTargets.length, inDuration, inTargets[i].Stats.Health);
+		Effect.Apply(effect);
+		
+		inTargets[i].Effects.push(effect);
+	}
+	inAbility.Charged = false;
 };
 
-
+/*
+Effects are created solely from Abilities 
+*/
 var Effect = {};
-Effect.Type = {};
-Effect.Type.Damage = 0;
-Effect.Type.Heal = 1;
-Effect.Spread = function(inPower, inDivisions)
-{
-	return (inPower + 1.1*inDivisions)/inDivisions
-};
-Effect.Create = function(inPlayer, inAbility)
+Effect.Create = function(inPower, inSpatialDivisions, inTemporalDivisions, inStat)
 {
 	var obj = {};
 	
-	obj.Time = 0;
-	obj.Age = inDuration;
-
-	if(inTargets > 1)
-		obj.ScalarSpatial = 1/(inTargets*0.9);
-	else
-		obj.ScalarSpatial = 1;
+	obj.Lifespan = inTemporalDivisions;
+	obj.Age = 0;
 	
-	if(inDuration > 1)
-		obj.ScalarTemporal = 1/(inDuration*0.9);
-	else
-		obj.ScalarTemporal = 1;
+	obj.Divisions = 0;
+	obj.Power = inPower;
 	
-	obj.Power = inPower*obj.ScalarSpatial*obj.ScalarTemporal;
+	if(inSpatialDivisions > 1)
+		obj.Divisions += inSpatialDivisions;
+		
+	if(inTemporalDivisions > 1)
+		obj.Divisions += inTemporalDivisions;	
+	
+	if(obj.Divisions != 0)
+		obj.Power *= (1 + 0.1*obj.Divisions)/obj.Divisions;
+	
+	obj.Stat = inStat;
 	
 	return obj;
 };
-Effect.Apply = function(inEffect, inPlayer)
+Effect.Apply = function(inEffect)
 {
+	inEffect.Age++;
+	if(inEffect.Age == inEffect.Lifespan)
+	{
+		
+	}
 	
+	Stat.Relative(obj.Stat, inEffect.Power);
 };
 
 
@@ -166,53 +191,29 @@ Group.Create = function()
 
 
 var Player = {};
-Player.MaxHealth = 100;
 Player.Create = function(inGroup)
 {
 	var obj = {};
 	
+	obj.Stats = {};
+	obj.Stats.Health = Stat.Create(0, 100, 100);
+	obj.Stats.Shield = Stat.Create(0, 100, 100);
+	obj.Stats.Action = Stat.Create(0, 3, 3);
+	obj.Stats.Empowered = Stat.Create(0, 100, 0);
+	obj.Stats.Inhibited = Stat.Create(0, 100, 0);
+	
 	obj.Group = inGroup;
 	obj.Group.Members.push(obj);
-	
-	obj.Health = Player.MaxHealth;
-	obj.Shield = 0;
-	obj.Weakness = 0;
-	
+
 	obj.Abilities = [];
 	obj.Targets = [];
 	obj.Effects = [];
-	
-	obj.Empowered = World.Energies[0]; // (increases created effects)
-	obj.Inhibited = World.Energies[0]; // (increases incoming negative effects / decreases incoming positive effects)
-	
-	obj.Actions = 0;
-	obj.Dead = false;
 	
 	return obj;
 };
 Player.PerformAction = function(inPlayer)
 {
-	obj.Actions--;
-	if(obj.Actions <= 0)
-		Turn.Advance();
-};
-Player.Effect = {};
-Player.Effect.Damage = function(inPlayer, inAmount)
-{
-	inPlayer.Health -= inAmount;
-	if(inPlayer.Health < 0)
-	{
-		inPlayer.Health = 0;
-		inPlayer.Dead = true;
-	}
-};
-Player.Effect.Heal = function(inPlayer, inAmount)
-{
-	inPlayer.Health += inAmount;
-	if(inPlayer.Health > Player.MaxHealth)
-	{
-		inPlayer.Health = Player.MaxHealth;
-	}
+	Stat.Relative(inPlayer.Stats.Action, -1);
 };
 
 
@@ -267,6 +268,7 @@ Round.Advance = function()
 	
 };
 
+
 </script>
 
 <script>
@@ -275,9 +277,14 @@ var World = {};
 World.Energies = [];
 World.Groups = [];
 
-World.Energies.push(Energy.Create());
-World.Energies.push(Energy.Create());
-World.Energies.push(Energy.Create());
+var i;
+var count = 3;
+var startingLevel = 3;
+for(i=0; i<count; i++)
+{
+	World.Energies.push(Stat.Create(0, startingLevel*count, startingLevel));	
+}
+
 
 World.Groups.push(Group.Create());
 World.Groups.push(Group.Create());
