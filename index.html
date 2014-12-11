@@ -4,6 +4,48 @@
 	
 <script>
 
+var Stat = {};
+Stat.Create = function(inMin, inLevel, inMax)
+{
+	var obj = {};
+	obj.Min = 0;
+	obj.Max = 100;
+	obj.Level = 50;
+	obj.Handlers = [];
+};
+Stat.Listen = function(inStat, inHandler)
+{
+	inStat.Handlers.push(inHandler);
+};
+Stat.Change = function(inStat, inAmount)
+{
+	var was, is;
+	was = inStat.Level;
+	inStat.Level += inAmount;
+	if(inStat.Level < inStat.Min)
+	{
+		inStat.Level = inStat.Min;
+	}
+	if(inStat.Level > inStat.Max)
+	{
+		inStat.Level = inStat.Max;
+	}
+	is = inStat.Level;
+	
+	var i;
+	for(i=0; i<inStat.Handlers.length; i++)
+	{
+		inStat.Handlers[i](inStat, is-was);
+	}
+	
+};
+
+var Utilities = {};
+Utilities.SetID = function(inObj)
+{
+	inObj.ID = Math.floor(Math.random()*100000);
+};
+
 
 var Energy = {};
 Energy.Settings = {};
@@ -19,10 +61,6 @@ Energy.Create = function()
 
 
 var Ability = {};
-Ability.Types = {};
-Ability.Types.Damage = function(){};
-Ability.Types.Heal = function(){};
-Ability.Types.Shield = function(){};
 Ability.Create = function(inVector, inType)
 {
 	var obj = {};
@@ -76,7 +114,6 @@ Ability.Charge = function(inAbility)
 	}
 	inAbility.Charged = true;
 };
-
 // creates an "effect" that will be used on onther players
 Ability.Use = function(inPlayer, inAbility, inTargets, inDuration)
 {
@@ -90,10 +127,9 @@ Effect.Type.Damage = 0;
 Effect.Type.Heal = 1;
 Effect.Spread = function(inPower, inDivisions)
 {
-	//reduce the power among divisions, but add a small increase for the number of divisions
-	return inPower * (1/(inDivisions*0.9));
+	return (inPower + 1.1*inDivisions)/inDivisions
 };
-Effect.Create = function(inPower, inDuration, inTargets)
+Effect.Create = function(inPlayer, inAbility)
 {
 	var obj = {};
 	
@@ -114,9 +150,9 @@ Effect.Create = function(inPower, inDuration, inTargets)
 	
 	return obj;
 };
-Effect.Effect = function(inEffect, inPlayer)
+Effect.Apply = function(inEffect, inPlayer)
 {
-	inEffect.
+	
 };
 
 
@@ -130,6 +166,7 @@ Group.Create = function()
 
 
 var Player = {};
+Player.MaxHealth = 100;
 Player.Create = function(inGroup)
 {
 	var obj = {};
@@ -137,7 +174,7 @@ Player.Create = function(inGroup)
 	obj.Group = inGroup;
 	obj.Group.Members.push(obj);
 	
-	obj.Health = 100;
+	obj.Health = Player.MaxHealth;
 	obj.Shield = 0;
 	obj.Weakness = 0;
 	
@@ -159,12 +196,32 @@ Player.PerformAction = function(inPlayer)
 	if(obj.Actions <= 0)
 		Turn.Advance();
 };
+Player.Effect = {};
+Player.Effect.Damage = function(inPlayer, inAmount)
+{
+	inPlayer.Health -= inAmount;
+	if(inPlayer.Health < 0)
+	{
+		inPlayer.Health = 0;
+		inPlayer.Dead = true;
+	}
+};
+Player.Effect.Heal = function(inPlayer, inAmount)
+{
+	inPlayer.Health += inAmount;
+	if(inPlayer.Health > Player.MaxHealth)
+	{
+		inPlayer.Health = Player.MaxHealth;
+	}
+};
 
-var Turn = {};
-Turn.Active = false;
-Turn.History = [];
-Turn.Groups = [];
-Turn.Create = function()
+
+var Round = {};
+Round.Active = false; // the current round
+Round.Player = false; // the current player within the round
+Round.History = []; // log of rounds
+Round.Groups = []; // the teams at play
+Round.Create = function()
 {
 	var obj = {};
 	obj.Members = [];
@@ -173,11 +230,12 @@ Turn.Create = function()
 	var i, j;
 	var alive = [];
 	var index;
-	for(i=0; i<Turn.Groups.length; i++)
+	for(i=0; i<Round.Groups.length; i++)
 	{
-		for(j=0; j<Turn.Groups[i].length; j++)
+		for(j=0; j<Round.Groups[i].length; j++)
 		{
-			alive.push(Turn.Groups[i].Members[j]);
+			if(!Round.Groups[i].Members[j].Dead)
+				alive.push(Round.Groups[i].Members[j]);
 		}
 	}
 	while(alive.length != 0)
@@ -185,27 +243,27 @@ Turn.Create = function()
 		index = Math.floor(alive.length*Math.random());
 		obj.Members.push( alive.splice(index, 1)) );
 	}
-	
-	Turn.History.push(obj);
-	Turn.Active = obj;
+	Round.History.push(obj);
+	Round.Active = obj;
 	return obj;
 };
-Turn.Advance = function()
+Round.Advance = function()
 {
-	Turn.Active.Index++;
+	Round.Active.Index++;
 	
-	if(Turn.Active.index >= Turn.Active.length)
+	if(Round.Active.index >= Round.Active.length)
 	{
-		Turn.Create();
+		Round.Create();
 		return;
 	}
 	
-	if(Turn.Members[Turn.Active.Index].Dead)
+	if(Round.Members[Round.Active.Index].Dead)
 	{
-		Turn.Advance();
+		Round.Advance();
 	}
 	
-	Turn.Members[Turn.Active.Index].Actions = 3;
+	Round.Player = Round.Members[Round.Active.Index]
+	Round.Player.Actions = 3;
 	
 };
 
