@@ -23,20 +23,14 @@ Ability.Types = {};
 Ability.Types.Damage = function(){};
 Ability.Types.Heal = function(){};
 Ability.Types.Shield = function(){};
-Ability.Create = function(inVector, inType, inTargets, inDuration)
+Ability.Create = function(inVector, inType)
 {
 	var obj = {};
 	obj.Vector = inVector;
 	//array of integers.
 	//when added, they must equal 0.
 	//no value (positive or negative) can exceed the total amount of energy in the world: World.Energies.length * Energy.Settings.DefaultLevel
-	
-	obj.Targets = inTargets;
-	// how many players the ability will effect
-	
-	obj.Duration = inDuration;
-	// how long will the ability effect players
-	
+
 	obj.Type = inType;
 	
 	//derived values
@@ -51,6 +45,9 @@ Ability.Create = function(inVector, inType, inTargets, inDuration)
 			obj.Power -= obj.Vector[i];
 		}
 	}
+	
+	ability.Charge = false;
+	
 	return obj;
 };
 // Check to see if performing an ability would cause one of the energy levels to go below 0
@@ -69,14 +66,57 @@ Ability.Check = function(inAbility)
 	}
 	return true;
 };
-// Actually perform the ability
-Ability.Perform = function(inAbility)
+// Charge the ability for use
+Ability.Charge = function(inAbility)
 {
 	var i;
 	for(i=0; i<inAbility.Vector.length; i++)
 	{
 		World.Energies[i].Level += inAbility.Vector[i];
 	}
+	inAbility.Charged = true;
+};
+
+// creates an "effect" that will be used on onther players
+Ability.Use = function(inPlayer, inAbility, inTargets, inDuration)
+{
+	var e = Effect.Create(inPlayer.Empowered.Level, inDuration, inTargets);
+};
+
+
+var Effect = {};
+Effect.Type = {};
+Effect.Type.Damage = 0;
+Effect.Type.Heal = 1;
+Effect.Spread = function(inPower, inDivisions)
+{
+	//reduce the power among divisions, but add a small increase for the number of divisions
+	return inPower * (1/(inDivisions*0.9));
+};
+Effect.Create = function(inPower, inDuration, inTargets)
+{
+	var obj = {};
+	
+	obj.Time = 0;
+	obj.Age = inDuration;
+
+	if(inTargets > 1)
+		obj.ScalarSpatial = 1/(inTargets*0.9);
+	else
+		obj.ScalarSpatial = 1;
+	
+	if(inDuration > 1)
+		obj.ScalarTemporal = 1/(inDuration*0.9);
+	else
+		obj.ScalarTemporal = 1;
+	
+	obj.Power = inPower*obj.ScalarSpatial*obj.ScalarTemporal;
+	
+	return obj;
+};
+Effect.Effect = function(inEffect, inPlayer)
+{
+	inEffect.
 };
 
 
@@ -103,13 +143,71 @@ Player.Create = function(inGroup)
 	
 	obj.Abilities = [];
 	obj.Targets = [];
+	obj.Effects = [];
 	
-	obj.Empowered = World.Energies[0]; // (increases outgoing effects)
-	obj.Inhibited = World.Energies[0]; // (increases incoming negative effects / reduces incoming positive effects)
+	obj.Empowered = World.Energies[0]; // (increases created effects)
+	obj.Inhibited = World.Energies[0]; // (increases incoming negative effects / decreases incoming positive effects)
+	
+	obj.Actions = 0;
+	obj.Dead = false;
 	
 	return obj;
 };
+Player.PerformAction = function(inPlayer)
+{
+	obj.Actions--;
+	if(obj.Actions <= 0)
+		Turn.Advance();
+};
 
+var Turn = {};
+Turn.Active = false;
+Turn.History = [];
+Turn.Groups = [];
+Turn.Create = function()
+{
+	var obj = {};
+	obj.Members = [];
+	obj.Index = 0;
+	
+	var i, j;
+	var alive = [];
+	var index;
+	for(i=0; i<Turn.Groups.length; i++)
+	{
+		for(j=0; j<Turn.Groups[i].length; j++)
+		{
+			alive.push(Turn.Groups[i].Members[j]);
+		}
+	}
+	while(alive.length != 0)
+	{
+		index = Math.floor(alive.length*Math.random());
+		obj.Members.push( alive.splice(index, 1)) );
+	}
+	
+	Turn.History.push(obj);
+	Turn.Active = obj;
+	return obj;
+};
+Turn.Advance = function()
+{
+	Turn.Active.Index++;
+	
+	if(Turn.Active.index >= Turn.Active.length)
+	{
+		Turn.Create();
+		return;
+	}
+	
+	if(Turn.Members[Turn.Active.Index].Dead)
+	{
+		Turn.Advance();
+	}
+	
+	Turn.Members[Turn.Active.Index].Actions = 3;
+	
+};
 
 </script>
 
