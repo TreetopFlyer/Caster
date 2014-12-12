@@ -3,10 +3,7 @@
 	<head>
 	
 <script>
-/*
-A Stat is a generic "meter" that has a numeric value that can move between a minimum and maximum.
-A Stat also dispatches change events. Change handlers are passed a reference to the Stat that changed and the relative change amount;
-*/
+
 var Stat = {};
 Stat.Create = function(inMin, inLevel, inMax)
 {
@@ -58,7 +55,7 @@ Stat.Absolute = function(inStat, inAmount)
 
 /*
 An Ability has the power to alter energy levels, causing the ability to "charge."
-A charged Ability can then be used to effect other players, consuming the charge.
+A charged ability can then be used to effect other players, consuming the charge.
 
 Both the charging of and use of Abilities cause the player to consume action points for their turn.
 
@@ -66,10 +63,10 @@ With each use, the player can modify the Ability's effect to be spread out accro
 Dividing up the effect this way causes it to have a different strength.
 The total amount of power is scaled by 10% for each division, and then the total is split evenly among the divisions:
 
-Dealing damage to 2 targets over 3 turns will result in 30% more damage dealt in total, at the cost of only dealing one-third of this damage to each player each turn.
+Dealing damage to 2 targets over 3 turns will result in 60% more damage dealt in total, at the cost of only dealing one-sixth of this damage to each player each turn.
 The same holds true for dealing damage to 3 targets over 2 turns.
 
-Dealing damage to 1 target over 2 turns will result in 10% more damage, at the cost of dealing only one-half of this damage each turn.
+Dealing damage to 1 target over 2 turns will result in 20% more damage, at the cost of dealing only one-half of this damage each turn.
 The same holds true for dealing damage to 2 targets this turn only.
 
 The strength of the effect is modified by the player's Empowered stat.
@@ -146,10 +143,7 @@ Ability.Use = function(inPlayer, inAbility, inTargets, inDuration)
 };
 
 /*
-Effects are created solely from Abilities.
-Where an Ability generates a charge transferring energy, an Effect consumes this charge to effect players.
-
-Effects are created to modify a single player Stat, based on the power of the ability and several "division" factors.
+Effects are created solely from Abilities 
 */
 var Effect = {};
 Effect.Create = function(inPower, inSpatialDivisions, inTemporalDivisions, inStat)
@@ -195,12 +189,7 @@ Group.Create = function()
 	return obj;
 };
 
-/*
-Players use Abilities to convert energy types to produce Effects that modify other players.
 
-Players also have an "attunement" to energy types that modify the strength of outgoing and incoming effects.
-These attunements wax and wain with their associated energy levels.
-*/
 var Player = {};
 Player.Create = function(inGroup)
 {
