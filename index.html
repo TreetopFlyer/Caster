@@ -63,10 +63,10 @@ With each use, the player can modify the Ability's effect to be spread out accro
 Dividing up the effect this way causes it to have a different strength.
 The total amount of power is scaled by 10% for each division, and then the total is split evenly among the divisions:
 
-Dealing damage to 2 targets over 3 turns will result in 60% more damage dealt in total, at the cost of only dealing one-sixth of this damage to each player each turn.
+Dealing damage to 2 targets over 3 turns will result in 30% more damage dealt in total, at the cost of only dealing one-third of this damage to each player each turn.
 The same holds true for dealing damage to 3 targets over 2 turns.
 
-Dealing damage to 1 target over 2 turns will result in 20% more damage, at the cost of dealing only one-half of this damage each turn.
+Dealing damage to 1 target over 2 turns will result in 0% more damage, at the cost of dealing only one-half of this damage each turn.
 The same holds true for dealing damage to 2 targets this turn only.
 
 The strength of the effect is modified by the player's Empowered stat.
@@ -134,7 +134,7 @@ Ability.Use = function(inPlayer, inAbility, inTargets, inDuration)
 	var effect;
 	for(i=0; i<inTargets.length; i++)
 	{
-		effect = Effect.Create(inAbility.Power, inTargets.length, inDuration, inTargets[i].Stats.Health);
+		effect = Effect.Create(inAbility.Power, inTargets.length, inDuration, inTargets[i].Stats.Health, inTargets[i].Stats.Inhibited);
 		Effect.Apply(effect);
 		
 		inTargets[i].Effects.push(effect);
@@ -146,38 +146,32 @@ Ability.Use = function(inPlayer, inAbility, inTargets, inDuration)
 Effects are created solely from Abilities 
 */
 var Effect = {};
-Effect.Create = function(inPower, inSpatialDivisions, inTemporalDivisions, inStat)
+Effect.Create = function(inPower, inSpatialDivisions, inTemporalDivisions, inStatChange, inStatInhibitor)
 {
 	var obj = {};
 	
 	obj.Lifespan = inTemporalDivisions;
 	obj.Age = 0;
 	
-	obj.Divisions = 0;
-	obj.Power = inPower;
+	obj.Divisions = inSpatialDivisions + inTemporalDivisions - 2;
+	obj.Power = inPower * (1 + 0.1*obj.Divisions)/(obj.Divisions+1);
 	
-	if(inSpatialDivisions > 1)
-		obj.Divisions += inSpatialDivisions;
-		
-	if(inTemporalDivisions > 1)
-		obj.Divisions += inTemporalDivisions;	
-	
-	if(obj.Divisions != 0)
-		obj.Power *= (1 + 0.1*obj.Divisions)/obj.Divisions;
-	
-	obj.Stat = inStat;
+	obj.StatChange = inStatChange;
+	obj.StatInhibit = inStatInhibit;
 	
 	return obj;
 };
 Effect.Apply = function(inEffect)
 {
 	inEffect.Age++;
-	if(inEffect.Age == inEffect.Lifespan)
+	
+	Stat.Relative(obj.Stat, inEffect.Power*inEffect.StatInhibit.Level);	
+	
+	if(inEffect.Age > inEffect.Lifespan)
 	{
 		
 	}
-	
-	Stat.Relative(obj.Stat, inEffect.Power);
+
 };
 
 
