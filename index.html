@@ -1,21 +1,136 @@
 <!DOCTYPE html>
 <html>
 	<head>
-	
+		
+		<script src="http://code.jquery.com/jquery-1.11.1.min.js"></script>
+		<link href="fontawesome/css/font-awesome.min.css" rel="stylesheet">
+		
+		<style>
+			.Stat
+			{
+				margin:5px;
+				padding:5px;
+				font-family:Arial;
+				font-size:11px;
+				background:#eee;
+				overflow:hidden;
+			}
+			.Stat .Label
+			{
+				display:none;
+				float:left;
+				padding-bottom:5px;
+			}
+			.Stat .Meter
+			{
+				float:right;
+				width:100%;				
+				border:1px solid #999;
+				border-radius:4px;
+			}
+			.Stat .Level
+			{
+				opacity:0.8;
+				height:5px;
+				padding:5px 0px 5px 0px;
+				text-indent:-9999999px;
+				border-right:1px solid #000;
+			}
+			.Stats:hover .Label
+			{
+				display:block;
+				width:15%;
+			}
+			.Stats:hover .Meter
+			{
+				width:80%;
+			}
+			.Stats:hover .Stat .Level
+			{
+				text-indent:0px;
+				height:20px;
+			}
+		</style>
+		
+		<style>
+			.Ability
+			{
+				background:#ddd;
+				float:left;
+				margin:5px;
+				opacity:0.5;
+			}
+			.Ability.Available{
+				opacity:1;
+			}
+			.Ability i
+			{
+				display:block;
+				text-align:center;
+				padding:5px;
+				border-bottom:1px solid #444;
+			}
+			.Ability ul
+			{
+				margin:0px;
+				padding:0px;
+			}
+			.Ability li
+			{
+				margin:0px;
+				padding:5px;
+				border-top:1px solid #ccc;
+				list-style-type:none;
+				text-align:right;
+			}
+			.Ability.Charged
+			{
+				border:2px solid #F30;
+			}
+		</style>
+		
+<!-- Util -->
 <script>
 
+var Util = {};
+Util.ID = function(inObj)
+{
+	inObj.Id = Math.floor(Math.random()*100000);
+};
+Util.Match = function(inObj1, inObj2)
+{
+	if(inObj1.ID === inObj2.ID)
+		return true;
+	else
+		return false;
+};
+Util.RemoveFrom = function(inObj, inArray)
+{
+	var i;
+	for(i=0; i<inArray.length; i++)
+	{
+		if( Util.Match(inArray[i], inObj.ID) )
+			inArray.Splice(i, 1);
+	}
+};
+</script>
+
+<!-- Stat -->
+<script>
 var Stat = {};
 Stat.Create = function(inMin, inLevel, inMax)
 {
 	var obj = {};
-	obj.Min = 0;
-	obj.Max = 100;
-	obj.Level = 50;
+	obj.Min = inMin;
+	obj.Max = inMax;
+	obj.Level = inLevel;
 	obj.Handlers = [];
+	return obj;
 };
 Stat.Listen = function(inStat, inHandler)
 {
 	inStat.Handlers.push(inHandler);
+	inHandler(inStat, 0);
 };
 Stat.Unlisten = function(inStat, inHandler)
 {
@@ -52,7 +167,10 @@ Stat.Absolute = function(inStat, inAmount)
 		inStat.Handlers[i](inStat, difference);
 	}	
 };
+</script>
 
+<!-- Ability -->
+<script>
 /*
 An Ability has the power to alter energy levels, causing the ability to "charge."
 A charged ability can then be used to effect other players, consuming the charge.
@@ -80,11 +198,11 @@ Ability.Create = function(inVector, inType)
 {
 	var obj = {};
 	obj.Vector = inVector;
-	//array of integers.
+	//array of integers that represent what energies are converted.
 	//when added, they must equal 0.
 	//no value (positive or negative) can exceed the total amount of energy in the world: World.Energies.length * Energy.Settings.DefaultLevel
 
-	obj.Type = inType;
+	obj.Routine = inType;
 	
 	//derived values
 	obj.Subtractions = []; // these parts of the vector are used to check whether or not the ability can be used
@@ -98,8 +216,8 @@ Ability.Create = function(inVector, inType)
 			obj.Power -= obj.Vector[i];
 		}
 	}
-	
-	obj.Charge = Stat.Create(0, 1, 0);
+	obj.Available = Stat.Create(0, 0, 1);
+	obj.Charge = Stat.Create(0, 0, 1);
 	
 	return obj;
 };
@@ -113,10 +231,10 @@ Ability.Check = function(inAbility, inEnergies)
 		current = inAbility.Subtractions[i];
 		if(inEnergies[current.Index].Level < -current.Amount)
 		{
-			return false;
+			Stat.Absolute(inAbility.Available, 0);
 		}
 	}
-	return true;
+	Stat.Absolute(inAbility.Available, 1);
 };
 // Charge the ability for use
 Ability.Charge = function(inAbility, inEnergies)
@@ -126,7 +244,7 @@ Ability.Charge = function(inAbility, inEnergies)
 	{
 		Stat.Relative(inEnergies[i], inAbility.Vector[i]);
 	}
-	inAbility.Charged = true;
+	Stat.Absolute(inAbility.Charge, 1);
 };
 Ability.Use = function(inPlayer, inAbility, inTargets, inDuration)
 {
@@ -134,67 +252,82 @@ Ability.Use = function(inPlayer, inAbility, inTargets, inDuration)
 	var effect;
 	for(i=0; i<inTargets.length; i++)
 	{
-		effect = Effect.Create(inAbility.Power, inTargets.length, inDuration, inTargets[i].Stats.Health, inTargets[i].Stats.Inhibited);
+		effect = Effect.Create(inAbility, inTargets.length, inDuration, inTargets[i]);
 		Effect.Apply(effect);
-		
-		inTargets[i].Effects.push(effect);
 	}
-	inAbility.Charged = false;
+	Stat.Absolute(inAbility.Charge, 0);
 };
+</script>
 
+<!-- Effect -->
+<script>
 /*
 Effects are created solely from Abilities 
 */
 var Effect = {};
-Effect.Create = function(inPower, inSpatialDivisions, inTemporalDivisions, inStatChange, inStatInhibitor)
+Effect.Type = {};
+Effect.Type.Damage = function(inEffect)
+{
+	var power = inEffect.Ability.Power * (1 + 0.1*inEffect.Divisions)/(inEffect.Divisions+1);
+	Stat.Relative(inEffect.Target.Stat.Health, -power*inEffect.Target.Stat.Inhibited.Level);
+};
+Effect.Type.Heal = function(inEffect)
+{
+	var power = inEffect.Ability.Power * (1 + 0.1*inEffect.Divisions)/(inEffect.Divisions+1);
+	Stat.Relative(inEffect.Target.Stat.Health, power*inEffect.Target.Stat.Inhibited.Level);
+};
+Effect.Create = function(inAbility, inSpatialDivisions, inTemporalDivisions, inTarget)
 {
 	var obj = {};
-	
+	Util.ID(obj);
 	obj.Lifespan = inTemporalDivisions;
 	obj.Age = 0;
-	
+	obj.Ability = inAbility;
 	obj.Divisions = inSpatialDivisions + inTemporalDivisions - 2;
-	obj.Power = inPower * (1 + 0.1*obj.Divisions)/(obj.Divisions+1);
-	
-	obj.StatChange = inStatChange;
-	obj.StatInhibit = inStatInhibit;
+	obj.Target = inTarget;
+	obj.Target.Effects.push(obj);
 	
 	return obj;
 };
 Effect.Apply = function(inEffect)
 {
 	inEffect.Age++;
-	
-	Stat.Relative(obj.Stat, inEffect.Power*inEffect.StatInhibit.Level);	
-	
+	inEffect.Ability.Routine(inEffect);
 	if(inEffect.Age > inEffect.Lifespan)
 	{
-		
+		Util.RemoveFrom(inEffect, inPlayer.Effects);
 	}
-
 };
+</script>
 
-
+<!-- Group -->
+<script>
 var Group = {};
 Group.Create = function()
 {
 	var obj = {};
+	Util.ID(obj);
 	obj.Members = [];
 	return obj;
 };
+</script>
 
+<!-- Player -->
+<script>
 
 var Player = {};
 Player.Create = function(inGroup)
 {
 	var obj = {};
 	
+	Util.ID(obj);
+	
 	obj.Stats = {};
 	obj.Stats.Health = Stat.Create(0, 100, 100);
 	obj.Stats.Shield = Stat.Create(0, 100, 100);
 	obj.Stats.Action = Stat.Create(0, 3, 3);
-	obj.Stats.Empowered = Stat.Create(0, 100, 0);
-	obj.Stats.Inhibited = Stat.Create(0, 100, 0);
+	obj.Stats.Empowered = Stat.Create(0, 0, 10);
+	obj.Stats.Inhibited = Stat.Create(0, 0, 10);
 	
 	obj.Group = inGroup;
 	obj.Group.Members.push(obj);
@@ -202,15 +335,47 @@ Player.Create = function(inGroup)
 	obj.Abilities = [];
 	obj.Targets = [];
 	obj.Effects = [];
+	obj.Duration = 1;
+	
+	Stat.Listen(World.Energies[0], function(inStat, inDelta){
+		Stat.Absolute(obj.Stats.Empowered, inStat.Level);
+	});
+	Stat.Listen(World.Energies[1], function(inStat, inDelta){
+		Stat.Absolute(obj.Stats.Inhibited, inStat.Level);
+	});
 	
 	return obj;
 };
-Player.PerformAction = function(inPlayer)
+Player.StartTurn = function(inPlayer)
+{
+	Stat.Absolute(inPlayer.Stats.Action, 3);
+	inPlayer.Targets = [];
+	inPlayer.Duration = 1;
+};
+Player.CheckAbilities = function(inPlayer)
+{
+	var i;
+	for(i=0; i<inPlayer.Abilities.length; i++)
+	{
+		Ability.Check(inPlayer.Abilities[i], World.Energies);
+	}
+};
+Player.ChargeAbility = function(inPlayer, inAbility)
 {
 	Stat.Relative(inPlayer.Stats.Action, -1);
+	Ability.Charge(inAbility, World.Energies);
+	Player.CheckAbilities(inPlayer);
 };
+Player.PerformAbility = function(inPlayer, inAbility)
+{
+	Stat.Relative(inPlayer.Stats.Action, -1);
+	Ability.Use(inPlayer, inAbility, inPlayer.Targets, inPlayer.Duration);
+	Player.CheckAbilities(inPlayer);
+};
+</script>
 
-
+<!-- Round -->
+<script>
 var Round = {};
 Round.Active = false; // the current round
 Round.Player = false; // the current player within the round
@@ -220,7 +385,7 @@ Round.Create = function()
 {
 	var obj = {};
 	obj.Members = [];
-	obj.Index = 0;
+	obj.Index = -1;
 	
 	var i, j;
 	var alive = [];
@@ -236,10 +401,11 @@ Round.Create = function()
 	while(alive.length != 0)
 	{
 		index = Math.floor(alive.length*Math.random());
-		obj.Members.push( alive.splice(index, 1)) );
+		obj.Members.push( alive.splice(index, 1) );
 	}
 	Round.History.push(obj);
 	Round.Active = obj;
+	Round.Advance(obj);
 	return obj;
 };
 Round.Advance = function()
@@ -257,13 +423,142 @@ Round.Advance = function()
 		Round.Advance();
 	}
 	
-	Round.Player = Round.Members[Round.Active.Index]
-	Round.Player.Actions = 3;
-	
+	Round.Player = Round.Members[Round.Active.Index];
 };
-
-
 </script>
+
+<!-- Display: Stat -->
+<script>
+var StatDisplay = {};
+StatDisplay.Create = function(inStat, inLabel, inColor)
+{
+	var obj = {};
+	
+	obj.JQ = {};
+	obj.JQ.Container = $("<div class=\"\Stat\"></div>");
+	obj.JQ.Label = $("<span class=\"Label\"></span>");
+	obj.JQ.Meter = $("<div class=\"Meter\"></div>");
+	obj.JQ.Level = $("<div class=\"Level\"></div>");
+	
+	obj.JQ.Container.append(obj.JQ.Label);
+	obj.JQ.Container.append(obj.JQ.Meter);
+	obj.JQ.Meter.append(obj.JQ.Level);
+	
+	obj.Label = inLabel;
+	
+	obj.JQ.Label.html(inLabel);
+	obj.JQ.Level.css({backgroundColor:inColor, width:"0%"});
+	obj.Stat = inStat;
+	
+	obj.ChangeHandler = function(inStat, inDelta)
+	{
+		obj.JQ.Level.css({width:( (inStat.Level-inStat.Min)/(inStat.Max-inStat.Min) * 100 )+"%"});
+		obj.JQ.Level.html(inStat.Level+"/"+inStat.Max);
+		
+		console.log(obj.Label, "is now", inStat.Level);
+	};
+	
+	Stat.Listen(obj.Stat, obj.ChangeHandler);
+	obj.ChangeHandler(obj.Stat, 0);
+	
+	return obj.JQ.Container;
+};
+</script>
+
+<!-- Display: Ability -->
+<script>
+var AbilityDisplay = {};
+AbilityDisplay.Charged = "Charged";
+AbilityDisplay.Available = "Available";
+AbilityDisplay.Create = function(inAbility)
+{
+	var obj = {};
+	
+	obj.JQ = {};
+	obj.JQ.Container = $("<div class=\"\Ability\"></div>");
+	
+	obj.JQ.Icon = $("<i class=\"fa\"></i>");
+	var icon = "";
+	switch(inAbility.Routine)
+	{
+		case Effect.Type.Damage:
+			icon = "fa-bolt";
+			break;
+			
+		case Effect.Type.Heal:
+			icon = "fa-heart";
+			break;
+	}
+	obj.JQ.Icon.addClass(icon);
+	obj.JQ.Container.append(obj.JQ.Icon);
+	
+	obj.JQ.Vector = $("<ul></ul>");
+	var i;
+	for(i=0; i<inAbility.Vector.length; i++)
+	{
+		obj.JQ.Vector.append("<li>"+inAbility.Vector[i]+"</li>");
+	}
+	obj.JQ.Container.append(obj.JQ.Vector);
+	
+
+	
+	obj.ChargeHandler = function(inStat, inDelta)
+	{
+		if(inStat.Level == inStat.Max)
+			obj.JQ.Container.addClass(AbilityDisplay.Charged);
+		else
+			obj.JQ.Container.removeClass(AbilityDisplay.Charged);
+	};
+	Stat.Listen(inAbility.Charge, obj.ChargeHandler);
+	
+	obj.AvailableHandler = function(inStat, inDelta)
+	{
+		if(inStat.Level == inStat.Max)
+			obj.JQ.Container.addClass(AbilityDisplay.Available);
+		else
+			obj.JQ.Container.removeClass(AbilityDisplay.Available);
+	};
+	Stat.Listen(inAbility.Available, obj.AvailableHandler);
+	
+	return obj.JQ.Container;
+};
+</script>
+
+<!-- Display: Player -->
+<script>
+	var PlayerDisplay = {};
+	PlayerDisplay.Create = function(inPlayer)
+	{
+		var obj = {};
+		obj.JQ = {};
+		obj.JQ.Container = $("<div class=\"Player\"></div>");
+		obj.JQ.Stats = $("<div class=\"Stats\"></div>");
+		obj.JQ.Abilities = $("<div class=\"Abilities\"></div>");
+		
+		obj.JQ.Stats.append(StatDisplay.Create(inPlayer.Stats.Health, "<i class=\"fa fa-shield\"></i> Life", "#F20"));
+		obj.JQ.Stats.append(StatDisplay.Create(inPlayer.Stats.Empowered, "<i class=\"fa fa-sign-out\"></i> Potent", "#A05"));
+		obj.JQ.Stats.append(StatDisplay.Create(inPlayer.Stats.Inhibited, "<i class=\"fa fa-sign-in\"></i> Suseptable", "#0F7"));
+		obj.JQ.Stats.append(StatDisplay.Create(inPlayer.Stats.Action, "<i class=\"fa fa-clock-o\"></i> Actions", "#FC0"));
+		
+		var i;
+		for(i=0; i<inPlayer.Abilities.length; i++)
+		{
+			obj.JQ.Abilities.append(AbilityDisplay.Create(inPlayer.Abilities[i]));	
+		}
+		
+		obj.JQ.Container.append(obj.JQ.Stats);
+		obj.JQ.Container.append(obj.JQ.Abilities);
+		
+		return obj.JQ.Container;
+	};
+</script>
+
+
+
+	</head>
+	<body>
+		
+	</body>
 
 <script>
 
@@ -276,7 +571,7 @@ var count = 3;
 var startingLevel = 3;
 for(i=0; i<count; i++)
 {
-	World.Energies.push(Stat.Create(0, startingLevel*count, startingLevel));	
+	World.Energies.push(Stat.Create(0, startingLevel, startingLevel*count));	
 }
 
 
@@ -286,17 +581,15 @@ World.Groups.push(Group.Create());
 var p1 = Player.Create(World.Groups[0]);
 var p2 = Player.Create(World.Groups[1]);
 
-var a1 = Ability.Create([-1, 1, 0], Ability.Types.Damage, 1, 1);
-var a2 = Ability.Create([0, -1, 1], Ability.Types.Damage, 1, 1);
-var a3 = Ability.Create([1, 0, -1], Ability.Types.Damage, 1, 1);
+var a1 = Ability.Create([-1, 1, 0], Effect.Type.Damage);
+var a2 = Ability.Create([0, -1, 1], Effect.Type.Damage);
+var a3 = Ability.Create([1, 0, -1], Effect.Type.Damage);
 
 p1.Abilities = [a1, a2, a3];
 p2.Abilities = [a1, a2, a3];
 
-</script>
+$("body").append(PlayerDisplay.Create(p1));
 
-	</head>
-	<body>
-		
-	</body>
+</script>
+	
 <html>
