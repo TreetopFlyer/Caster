@@ -53,6 +53,10 @@
 		</style>
 		
 		<style>
+			.Abilities
+			{
+				overflow:hidden;
+			}
 			.Ability
 			{
 				background:#ddd;
@@ -325,7 +329,7 @@ Player.Create = function(inGroup)
 	obj.Stats = {};
 	obj.Stats.Health = Stat.Create(0, 100, 100);
 	obj.Stats.Shield = Stat.Create(0, 100, 100);
-	obj.Stats.Action = Stat.Create(0, 3, 3);
+	obj.Stats.Action = Stat.Create(0, 0, 3);
 	obj.Stats.Empowered = Stat.Create(0, 0, 10);
 	obj.Stats.Inhibited = Stat.Create(0, 0, 10);
 	
@@ -346,11 +350,19 @@ Player.Create = function(inGroup)
 	
 	return obj;
 };
+Player.IsDead = function(inPlayer)
+{
+	if(inPlayer.Stats.Health.Level == 0)
+		return true;
+	else
+		return false;
+};
 Player.StartTurn = function(inPlayer)
 {
 	Stat.Absolute(inPlayer.Stats.Action, 3);
 	inPlayer.Targets = [];
 	inPlayer.Duration = 1;
+	Player.CheckAbilities(inPlayer);
 };
 Player.CheckAbilities = function(inPlayer)
 {
@@ -392,16 +404,16 @@ Round.Create = function()
 	var index;
 	for(i=0; i<Round.Groups.length; i++)
 	{
-		for(j=0; j<Round.Groups[i].length; j++)
+		for(j=0; j<Round.Groups[i].Members.length; j++)
 		{
-			if(!Round.Groups[i].Members[j].Dead)
+			if(!Player.IsDead(Round.Groups[i].Members[j]))
 				alive.push(Round.Groups[i].Members[j]);
 		}
 	}
 	while(alive.length != 0)
 	{
 		index = Math.floor(alive.length*Math.random());
-		obj.Members.push( alive.splice(index, 1) );
+		obj.Members.push( alive.splice(index, 1)[0] );
 	}
 	Round.History.push(obj);
 	Round.Active = obj;
@@ -417,13 +429,14 @@ Round.Advance = function()
 		Round.Create();
 		return;
 	}
+	Round.Player = Round.Active.Members[Round.Active.Index];	
 	
-	if(Round.Members[Round.Active.Index].Dead)
+	if(Player.IsDead(Round.Player))
 	{
 		Round.Advance();
+		return;
 	}
-	
-	Round.Player = Round.Members[Round.Active.Index];
+	Player.StartTurn(Round.Player);
 };
 </script>
 
@@ -454,8 +467,6 @@ StatDisplay.Create = function(inStat, inLabel, inColor)
 	{
 		obj.JQ.Level.css({width:( (inStat.Level-inStat.Min)/(inStat.Max-inStat.Min) * 100 )+"%"});
 		obj.JQ.Level.html(inStat.Level+"/"+inStat.Max);
-		
-		console.log(obj.Label, "is now", inStat.Level);
 	};
 	
 	Stat.Listen(obj.Stat, obj.ChangeHandler);
@@ -473,7 +484,7 @@ AbilityDisplay.Available = "Available";
 AbilityDisplay.Create = function(inAbility)
 {
 	var obj = {};
-	
+	obj.Ability = inAbility;
 	obj.JQ = {};
 	obj.JQ.Container = $("<div class=\"\Ability\"></div>");
 	
@@ -530,6 +541,7 @@ AbilityDisplay.Create = function(inAbility)
 	PlayerDisplay.Create = function(inPlayer)
 	{
 		var obj = {};
+		obj.Player = inPlayer;
 		obj.JQ = {};
 		obj.JQ.Container = $("<div class=\"Player\"></div>");
 		obj.JQ.Stats = $("<div class=\"Stats\"></div>");
@@ -546,8 +558,31 @@ AbilityDisplay.Create = function(inAbility)
 			obj.JQ.Abilities.append(AbilityDisplay.Create(inPlayer.Abilities[i]));	
 		}
 		
+		Stat.Listen(obj.Player.Stats.Action, function(inStat, inDelta){
+			if(inStat.Level == inStat.Min)
+			{
+				obj.JQ.Container.removeClass("Active");
+			}
+			if(inStat.Level == inStat.Max)
+			{
+				obj.JQ.Container.addClass("Active");
+			}
+		});
+		
 		obj.JQ.Container.append(obj.JQ.Stats);
 		obj.JQ.Container.append(obj.JQ.Abilities);
+		
+		obj.JQ.Container.click(function(e)
+		{
+			if(obj.JQ.Container.hasClass("Targeted"))
+			{
+				obj.JQ.Container.removeClass("Targeted");
+			}
+			else
+			{
+				obj.JQ.Container.addClass("Targeted");
+			}
+		});
 		
 		return obj.JQ.Container;
 	};
@@ -574,7 +609,6 @@ for(i=0; i<count; i++)
 	World.Energies.push(Stat.Create(0, startingLevel, startingLevel*count));	
 }
 
-
 World.Groups.push(Group.Create());
 World.Groups.push(Group.Create());
 
@@ -588,7 +622,11 @@ var a3 = Ability.Create([1, 0, -1], Effect.Type.Damage);
 p1.Abilities = [a1, a2, a3];
 p2.Abilities = [a1, a2, a3];
 
+Round.Groups = World.Groups;
+Round.Create();
+
 $("body").append(PlayerDisplay.Create(p1));
+$("body").append(PlayerDisplay.Create(p2));
 
 </script>
 	
