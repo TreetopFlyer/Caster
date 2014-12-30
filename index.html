@@ -117,6 +117,26 @@ Util.RemoveFrom = function(inObj, inArray)
 			inArray.Splice(i, 1);
 	}
 };
+Util.RandomSplice = function(inArray)
+{
+	var index = Math.floor(inArray.length*Math.random());
+	return inArray.splice(index, 1)[0];
+};
+// produce an array of length inCount that will contain random values, adding up to inAmount.
+Util.Divvy = function(inAmount, inCount)
+{
+	var i;
+	var out = [];
+	var decrement = 0;
+	for(i=0; i<inCount-1; i++)
+	{
+		decrement = Math.floor((inAmount+1)*Math.random());
+		inAmount -= decrement;
+		out[i] = decrement;
+	}
+	out.push(inAmount);
+	return out;
+};
 </script>
 
 <!-- Stat -->
@@ -224,6 +244,39 @@ Ability.Create = function(inVector, inType)
 	obj.Charge = Stat.Create(0, 0, 1);
 	
 	return obj;
+};
+// creates a random ability
+Ability.Random = function(inMaxPower, inEnergies)
+{
+	
+	var energies = [];
+	var i;
+	for(i=0; i<inEnergies.length; i++)
+	{
+		energies.push(inEnergies[i]);
+	}	
+
+	var abilityPower = Math.ceil(Math.random()*inMaxPower); // roll for how much energy the ability will require
+	var abilityNegative = Math.floor(Math.random()*(inEnergies.length-1)) + 1; // roll for how many energies will be negative
+	var abilityPositive = inEnergies.length-abilityNegative;
+	
+	var vectorNegative = Util.Divvy(-abilityPower, abilityNegative);// the negative part of the change vector
+	var vectorPositive = Util.Divvy(abilityPower, abilityPositive); //the positive part of the change vector
+
+	
+	var vectorOrdered = vectorNegative.concat(vectorPositive);
+	var vectorJumbled = [];
+	
+
+	
+	while(vectorOrdered.length != 0)
+	{
+		vectorJumbled.push( Util.RandomSplice(vectorOrdered) );
+	}
+
+	console.log(vectorJumbled);	
+	
+	return Ability.Create(vectorJumbled, Effect.Type.Damage);
 };
 // Check to see if performing an ability would cause one of the energy levels to go below 0
 Ability.Check = function(inAbility, inEnergies)
@@ -588,8 +641,6 @@ AbilityDisplay.Create = function(inAbility)
 	};
 </script>
 
-
-
 	</head>
 	<body>
 		
@@ -602,7 +653,7 @@ World.Energies = [];
 World.Groups = [];
 
 var i;
-var count = 3;
+var count = 5;
 var startingLevel = 3;
 for(i=0; i<count; i++)
 {
@@ -615,12 +666,12 @@ World.Groups.push(Group.Create());
 var p1 = Player.Create(World.Groups[0]);
 var p2 = Player.Create(World.Groups[1]);
 
-var a1 = Ability.Create([-1, 1, 0], Effect.Type.Damage);
-var a2 = Ability.Create([0, -1, 1], Effect.Type.Damage);
-var a3 = Ability.Create([1, 0, -1], Effect.Type.Damage);
+p1.Abilities.push(Ability.Random(2, World.Energies));
+p1.Abilities.push(Ability.Random(2, World.Energies));
+p1.Abilities.push(Ability.Random(2, World.Energies));
+p1.Abilities.push(Ability.Random(2, World.Energies));
 
-p1.Abilities = [a1, a2, a3];
-p2.Abilities = [a1, a2, a3];
+
 
 Round.Groups = World.Groups;
 Round.Create();
