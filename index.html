@@ -17,7 +17,6 @@
 			}
 			.Stat .Label
 			{
-				display:none;
 				float:left;
 				padding-bottom:5px;
 			}
@@ -35,20 +34,6 @@
 				padding:5px 0px 5px 0px;
 				text-indent:-9999999px;
 				border-right:1px solid #000;
-			}
-			.Stats:hover .Label
-			{
-				display:block;
-				width:15%;
-			}
-			.Stats:hover .Meter
-			{
-				width:80%;
-			}
-			.Stats:hover .Stat .Level
-			{
-				text-indent:0px;
-				height:20px;
 			}
 		</style>
 		
@@ -107,6 +92,16 @@ Util.Match = function(inObj1, inObj2)
 		return true;
 	else
 		return false;
+};
+Util.Find = function(inObj, inArray)
+{
+	var i;
+	for(i=0; i<inArray.length; i++)
+	{
+		if( Util.Match(inArray[i], inObj.ID) )
+			return i;
+	}
+	return -1;
 };
 Util.RemoveFrom = function(inObj, inArray)
 {
