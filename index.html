@@ -77,6 +77,24 @@
 				border:2px solid #F30;
 			}
 		</style>
+
+		<style>
+			.Player.Targeted{
+				border:2px solid #FA0;
+			}
+		</style>
+		
+		<style>
+			.Groups
+			{
+				overflow:hidden;
+			}
+			.Group
+			{
+				float:left;
+				width:30%;
+			}
+		</style>
 		
 <!-- Util -->
 <script>
@@ -100,6 +118,20 @@ Util.Find = function(inObj, inArray)
 	{
 		if( Util.Match(inArray[i], inObj.ID) )
 			return i;
+	}
+	return -1;
+};
+Util.RemoveFirst = function(inObj, inArray)
+{
+	var i;
+	for(i=0; i<inArray.length; i++)
+	{
+		if( Util.Match(inArray[i], inObj.ID) )
+		{
+			inArray.splice(i, 1);
+			return i;			
+		}
+
 	}
 	return -1;
 };
@@ -140,6 +172,7 @@ var Stat = {};
 Stat.Create = function(inMin, inLevel, inMax)
 {
 	var obj = {};
+	obj.Name = "";
 	obj.Min = inMin;
 	obj.Max = inMax;
 	obj.Level = inLevel;
@@ -241,7 +274,7 @@ Ability.Create = function(inVector, inType)
 	return obj;
 };
 // creates a random ability
-Ability.Random = function(inMaxPower, inEnergies)
+Ability.Random = function(inPower, inEnergies)
 {
 	
 	var energies = [];
@@ -251,26 +284,22 @@ Ability.Random = function(inMaxPower, inEnergies)
 		energies.push(inEnergies[i]);
 	}	
 
-	var abilityPower = Math.ceil(Math.random()*inMaxPower); // roll for how much energy the ability will require
+	//var abilityPower = Math.ceil(Math.random()*inMaxPower); // roll for how much energy the ability will require
+	var abilityPower = inPower;
+	
 	var abilityNegative = Math.floor(Math.random()*(inEnergies.length-1)) + 1; // roll for how many energies will be negative
 	var abilityPositive = inEnergies.length-abilityNegative;
 	
 	var vectorNegative = Util.Divvy(-abilityPower, abilityNegative);// the negative part of the change vector
 	var vectorPositive = Util.Divvy(abilityPower, abilityPositive); //the positive part of the change vector
-
-	
 	var vectorOrdered = vectorNegative.concat(vectorPositive);
 	var vectorJumbled = [];
-	
 
-	
 	while(vectorOrdered.length != 0)
 	{
 		vectorJumbled.push( Util.RandomSplice(vectorOrdered) );
 	}
 
-	console.log(vectorJumbled);	
-	
 	return Ability.Create(vectorJumbled, Effect.Type.Damage);
 };
 // Check to see if performing an ability would cause one of the energy levels to go below 0
@@ -584,8 +613,14 @@ AbilityDisplay.Create = function(inAbility)
 </script>
 
 <!-- Display: Player -->
+<!-- the static class player also handles targeting -->
 <script>
 	var PlayerDisplay = {};
+	PlayerDisplay.CSS = {};
+	PlayerDisplay.CSS.Targeted = "Targeted";
+	PlayerDisplay.CSS.Active = "Active";
+	PlayerDisplay.JQ = {};
+	PlayerDisplay.JQ.Targeted = $();
 	PlayerDisplay.Create = function(inPlayer)
 	{
 		var obj = {};
@@ -609,11 +644,13 @@ AbilityDisplay.Create = function(inAbility)
 		Stat.Listen(obj.Player.Stats.Action, function(inStat, inDelta){
 			if(inStat.Level == inStat.Min)
 			{
-				obj.JQ.Container.removeClass("Active");
+				obj.JQ.Container.removeClass(PlayerDisplay.CSS.Active);
+				
 			}
 			if(inStat.Level == inStat.Max)
 			{
-				obj.JQ.Container.addClass("Active");
+				obj.JQ.Container.addClass(PlayerDisplay.CSS.Active);
+				
 			}
 		});
 		
@@ -622,18 +659,46 @@ AbilityDisplay.Create = function(inAbility)
 		
 		obj.JQ.Container.click(function(e)
 		{
-			if(obj.JQ.Container.hasClass("Targeted"))
+			if(obj.JQ.Container.hasClass(PlayerDisplay.CSS.Targeted))
 			{
-				obj.JQ.Container.removeClass("Targeted");
+				obj.JQ.Container.removeClass(PlayerDisplay.CSS.Targeted);
+				PlayerDisplay.JQ.Targeted = PlayerDisplay.JQ.Targeted.not(obj.JQ.Container);
 			}
 			else
 			{
-				obj.JQ.Container.addClass("Targeted");
+				obj.JQ.Container.addClass(PlayerDisplay.CSS.Targeted);
+				PlayerDisplay.JQ.Targeted = PlayerDisplay.JQ.Targeted.add(obj.JQ.Container);
 			}
 		});
 		
 		return obj.JQ.Container;
 	};
+</script>
+
+<!-- Display: Groups -->
+<script>
+var GroupsDisplay = {};
+GroupsDisplay.Create = function(inGroups)
+{
+	var obj = {};
+	obj.Groups = inGroups;
+	obj.JQ = {};
+	obj.JQ.Container = $("<div class=\"Groups\"></div>");
+	obj.JQ.Groups = $();
+	var i, j;
+	var group;
+	for(i=0; i<obj.Groups.length; i++)
+	{
+		group = $("<div class=\"Group\"></div>");
+		for(j=0; j<obj.Groups[i].Members.length; j++)
+		{
+			group.append(PlayerDisplay.Create(obj.Groups[i].Members[j]));
+		}
+		obj.JQ.Groups = obj.JQ.Groups.add(group);
+	}
+	obj.JQ.Container.append(obj.JQ.Groups);
+	return obj.JQ.Container;
+};
 </script>
 
 	</head>
@@ -644,35 +709,49 @@ AbilityDisplay.Create = function(inAbility)
 <script>
 
 var World = {};
-World.Energies = [];
-World.Groups = [];
 
+// setup global energies
+World.Energies = [];
 var i;
 var count = 5;
 var startingLevel = 3;
+var energy;
 for(i=0; i<count; i++)
 {
-	World.Energies.push(Stat.Create(0, startingLevel, startingLevel*count));	
+	energy = Stat.Create(0, startingLevel, startingLevel*count)
+	World.Energies.push(energy);
+	$("body").append( StatDisplay.Create(energy, "Energy "+(i+1), "#0aD") );
 }
 
+// setup global groups
+World.Groups = [];
 World.Groups.push(Group.Create());
 World.Groups.push(Group.Create());
 
+// create players and put them in the groups
 var p1 = Player.Create(World.Groups[0]);
+p1.Abilities.push(Ability.Random(2, World.Energies));
+p1.Abilities.push(Ability.Random(2, World.Energies));
+p1.Abilities.push(Ability.Random(2, World.Energies));
+p1.Abilities.push(Ability.Random(3, World.Energies));
+p1.Abilities.push(Ability.Random(3, World.Energies));
+p1.Abilities.push(Ability.Random(4, World.Energies));
+
 var p2 = Player.Create(World.Groups[1]);
-
-p1.Abilities.push(Ability.Random(2, World.Energies));
-p1.Abilities.push(Ability.Random(2, World.Energies));
-p1.Abilities.push(Ability.Random(2, World.Energies));
-p1.Abilities.push(Ability.Random(2, World.Energies));
-
-
+p2.Abilities.push(Ability.Random(2, World.Energies));
+p2.Abilities.push(Ability.Random(2, World.Energies));
+p2.Abilities.push(Ability.Random(2, World.Energies));
+p2.Abilities.push(Ability.Random(3, World.Energies));
+p2.Abilities.push(Ability.Random(3, World.Energies));
+p2.Abilities.push(Ability.Random(4, World.Energies));
 
 Round.Groups = World.Groups;
 Round.Create();
 
-$("body").append(PlayerDisplay.Create(p1));
-$("body").append(PlayerDisplay.Create(p2));
+
+
+
+$("body").append(GroupsDisplay.Create(World.Groups));
 
 </script>
 	
