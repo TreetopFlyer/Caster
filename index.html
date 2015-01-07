@@ -53,9 +53,7 @@
 			.Stat .Level
 			{
 				opacity:0.8;
-				height:5px;
-				padding:5px 0px 5px 0px;
-				text-indent:-9999999px;
+				text-indent:5px;
 				border-right:1px solid #000;
 			}
 		</style>
@@ -372,11 +370,11 @@ The same holds true for dealing damage to 2 targets this turn only.
 The strength of the effect is modified by the player's Empowered stat.
 The effect strength is calculated only once when the effect is created and lasts the duration of the effect.
 
-Applications of the effect to a target player are modified by the target player's Inhibited stat.
+Applications of the effect to a target player are modified by the target player's Suseptable stat.
 This modification is re-calculated each time the effect is applied to it's target.
 */
 var Ability = {};
-Ability.Create = function(inVector, inType)
+Ability.Create = function(inVector)
 {
 	var obj = {};
 	Util.ID(obj);
@@ -385,8 +383,6 @@ Ability.Create = function(inVector, inType)
 	//array of integers that represent what energies are converted.
 	//when added, they must equal 0.
 	//no value (positive or negative) can exceed the total amount of energy in the world: World.Energies.length * Energy.Settings.DefaultLevel
-
-	obj.Routine = inType;
 	
 	//derived values
 	obj.Subtractions = []; // these parts of the vector are used to check whether or not the ability can be used
@@ -432,7 +428,7 @@ Ability.Random = function(inPower, inEnergies)
 		vectorJumbled.push( Util.RandomSplice(vectorOrdered) );
 	}
 
-	return Ability.Create(vectorJumbled, Effect.Type.Damage);
+	return Ability.Create(vectorJumbled);
 };
 // Check to see if performing an ability would cause one of the energy levels to go below 0
 Ability.Check = function(inAbility, inEnergies)
@@ -466,7 +462,7 @@ Ability.Use = function(inPlayer, inAbility, inTargets, inDuration)
 	var effect;
 	for(i=0; i<inTargets.length; i++)
 	{
-		effect = Effect.Create(inAbility, inTargets.length, inDuration, inTargets[i]);
+		effect = Effect.Create(inAbility.Power, inPlayer.Stats.Potency.Level, inTargets.length, inDuration, inTargets[i]);
 		Effect.Apply(effect);
 	}
 	Stat.Absolute(inAbility.Charge, 0);
@@ -480,33 +476,33 @@ Effects are created solely from Abilities
 */
 var Effect = {};
 Effect.Type = {};
-Effect.Type.Damage = function(inEffect)
-{
-	var power = inEffect.Ability.Power * (1 + 0.1*inEffect.Divisions)/(inEffect.Divisions+1);
-	Stat.Relative(inEffect.Target.Stats.Health, -power*inEffect.Target.Stats.Inhibited.Level);
-};
-Effect.Type.Heal = function(inEffect)
-{
-	var power = inEffect.Ability.Power * (1 + 0.1*inEffect.Divisions)/(inEffect.Divisions+1);
-	Stat.Relative(inEffect.Target.Stats.Health, power*inEffect.Target.Stats.Inhibited.Level);
-};
-Effect.Create = function(inAbility, inSpatialDivisions, inTemporalDivisions, inTarget)
+Effect.Create = function(inPower, inPotency, inSpatialDivisions, inTemporalDivisions, inTarget)
 {
 	var obj = {};
 	Util.ID(obj);
 	obj.Lifespan = inTemporalDivisions;
 	obj.Age = 0;
-	obj.Ability = inAbility;
 	obj.Divisions = inSpatialDivisions + inTemporalDivisions - 2;
 	obj.Target = inTarget;
 	obj.Target.Effects.push(obj);
+	obj.Potency = inPotency;
+	obj.Power = inPower;
 	
 	return obj;
 };
 Effect.Apply = function(inEffect)
 {
 	inEffect.Age++;
-	inEffect.Ability.Routine(inEffect);
+	
+	var power = inEffect.Power * (1 + 0.1*inEffect.Divisions)/(inEffect.Divisions+1);
+	power *= inEffect.Target.Stats.Suseptable.Level;
+	
+	var potency = (inEffect.Potency+inEffect.Power)*2;
+	
+	console.log("power:", power, "potency:", potency, "total:", (power+potency));
+	
+	Stat.Relative(inEffect.Target.Stats.Health, -(power + potency));
+	
 	if(inEffect.Age > inEffect.Lifespan)
 	{
 		Util.RemoveFrom(inEffect, inPlayer.Effects);
@@ -541,8 +537,8 @@ Player.Create = function(inGroup)
 	obj.Stats.Health = Stat.Create(0, 100, 100);
 	obj.Stats.Shield = Stat.Create(0, 100, 100);
 	obj.Stats.Action = Stat.Create(0, 0, 3);
-	obj.Stats.Empowered = Stat.Create(0, 0, 10);
-	obj.Stats.Inhibited = Stat.Create(0, 0, 10);
+	obj.Stats.Potency = Stat.Create(0, 0, 10);
+	obj.Stats.Suseptable = Stat.Create(0, 0, 10);
 	
 	obj.Group = inGroup;
 	obj.Group.Members.push(obj);
@@ -557,12 +553,12 @@ Player.Create = function(inGroup)
 	obj.IndexPotent = Math.floor(World.Energies.length*Math.random());	
 	
 	Stat.Listen(World.Energies[obj.IndexPotent], function(inStat, inDelta){
-		Stat.Absolute(obj.Stats.Empowered, inStat.Level);
+		Stat.Absolute(obj.Stats.Potency, inStat.Level);
 	});
 	
 
 	Stat.Listen(World.Energies[obj.IndexSuseptable], function(inStat, inDelta){
-		Stat.Absolute(obj.Stats.Inhibited, inStat.Level);
+		Stat.Absolute(obj.Stats.Suseptable, inStat.Level);
 	});
 	
 	Player.Instances.push(obj);
@@ -817,8 +813,8 @@ AbilityDisplay.Create = function(inAbility, inPlayer)
 		Util.SetDisplayID(obj.Player, obj.JQ.Container);		
 		
 		obj.JQ.Stats.append(StatDisplay.Create(inPlayer.Stats.Health, "<i class=\"fa fa-shield\"></i> Life", "#F20"));
-		obj.JQ.Stats.append(StatDisplay.Create(inPlayer.Stats.Empowered, "<i class=\"fa fa-sign-out\"></i> Potent ("+(obj.Player.IndexPotent+1)+")", "#A05"));
-		obj.JQ.Stats.append(StatDisplay.Create(inPlayer.Stats.Inhibited, "<i class=\"fa fa-sign-in\"></i> Suseptable ("+(obj.Player.IndexSuseptable+1)+")", "#0F7"));
+		obj.JQ.Stats.append(StatDisplay.Create(inPlayer.Stats.Potency, "<i class=\"fa fa-sign-out\"></i> Potent (Energy "+(obj.Player.IndexPotent+1)+")", "#A05"));
+		obj.JQ.Stats.append(StatDisplay.Create(inPlayer.Stats.Suseptable, "<i class=\"fa fa-sign-in\"></i> Suseptable (Energy "+(obj.Player.IndexSuseptable+1)+")", "#0F7"));
 		obj.JQ.Stats.append(StatDisplay.Create(inPlayer.Stats.Action, "<i class=\"fa fa-clock-o\"></i> Actions", "#FC0"));
 		
 		var i;
@@ -831,7 +827,6 @@ AbilityDisplay.Create = function(inAbility, inPlayer)
 		
 		Stat.Listen(obj.Player.Stats.Action, function(inStat, inDelta)
 		{
-			console.log(obj.Player.ID, inDelta);
 			if(inStat.Level == inStat.Min)
 			{
 				obj.JQ.Container.removeClass(PlayerDisplay.CSS.Active);
@@ -927,8 +922,8 @@ var World = {};
 // setup global energies
 World.Energies = [];
 var i;
-var count = 4;
-var startingLevel = 4;
+var count = 3;
+var startingLevel = 2;
 var energy;
 var jqEnergies = $("<div class=\"Energies\"></div>");
 for(i=0; i<count; i++)
@@ -947,10 +942,26 @@ World.Groups.push(Group.Create());
 function makePlayer(inGroup)
 {
 	var p = Player.Create(inGroup);
-	p.Abilities.push(Ability.Random(1, World.Energies));
-	p.Abilities.push(Ability.Random(1, World.Energies));
-	p.Abilities.push(Ability.Random(1, World.Energies));
-	p.Abilities.push(Ability.Random(1, World.Energies));
+	
+	var i, j;
+	var vector;
+	for(i=0; i<World.Energies.length; i++)
+	{
+		vector = [];
+		for(j=0; j<World.Energies.length; j++)
+		{
+			vector[j] = 0;
+		}
+		vector[i] = 1;
+		
+		if(i === World.Energies.length-1)
+			vector[0] = -1;
+		else
+			vector[i+1] = -1;
+		
+		p.Abilities.push( Ability.Create(vector, Effect.Type.Damage) );
+	}
+	
 	p.Abilities.push(Ability.Random(2, World.Energies));
 	p.Abilities.push(Ability.Random(2, World.Energies));
 	p.Abilities.push(Ability.Random(2, World.Energies));
@@ -963,11 +974,11 @@ function makePlayer(inGroup)
 // create players and put them in the groups
 var p1 = makePlayer(World.Groups[0]);
 var p2 = makePlayer(World.Groups[0]);
-var p3 = makePlayer(World.Groups[0]);
+//var p3 = makePlayer(World.Groups[0]);
 
 var p4 = makePlayer(World.Groups[1]);
 var p5 = makePlayer(World.Groups[1]);
-var p6 = makePlayer(World.Groups[1]);
+//var p6 = makePlayer(World.Groups[1]);
 
 
 Round.Groups = World.Groups;
